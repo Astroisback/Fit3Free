@@ -1,4 +1,4 @@
-# HR Bridge
+# Fit3Free
 
 Stream live heart rate off a Samsung Galaxy Fit3 (or any BLE band that implements
 the standard Heart Rate Profile) to your Android notification shade, to a PC, or
@@ -35,6 +35,10 @@ you will get the usual unknown-sources prompt.
 First run: grant Bluetooth and notification permissions, pick your band from the
 bonded-devices list, press START. The band must already be paired in Android
 Bluetooth settings.
+
+The package ID is still `com.hrbridge` from before the project was renamed. It
+stays that way deliberately so existing installs upgrade in place rather than
+appearing as a second app.
 
 ## Build
 

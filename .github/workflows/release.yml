@@ -35,12 +35,12 @@ jobs:
       - name: Rename APK with version
         run: |
           VERSION="${GITHUB_REF_NAME:-dev}"
-          cp app/build/outputs/apk/debug/app-debug.apk "hr-bridge-${VERSION}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "fit3free-${VERSION}.apk"
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: hr-bridge-*.apk
+          files: fit3free-*.apk
           generate_release_notes: true
           body: |
             Debug-signed APK. Sideload it and allow install from unknown sources.

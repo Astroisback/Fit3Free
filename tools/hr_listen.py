@@ -1,6 +1,6 @@
 """Subscribe to a BLE Heart Rate Measurement characteristic and print samples.
 
-Works against a watch/band directly, or against a phone running HR Bridge with
+Works against a watch/band directly, or against a phone running Fit3Free with
 the BLE broadcast toggle on. Demonstrates that the standard Heart Rate Profile
 needs no bonding: on a Galaxy Fit3 this connects and streams with no pairing
 prompt at all.

@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "HRBridgeApp"
+rootProject.name = "Fit3Free"
 include ':app'

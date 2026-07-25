@@ -1,7 +1,7 @@
 """Floating always-on-top BPM widget for Windows/Linux desktops.
 
 Runs a small HTTP listener and shows whatever BPM it receives in a frameless,
-transparent, draggable window. Point HR Bridge's "WiFi fallback" toggle at this
+transparent, draggable window. Point Fit3Free's "WiFi fallback" toggle at this
 machine (http://<pc-ip>:8765/) and the number tracks your watch live.
 
     python desktop_widget.py                 # listen on 0.0.0.0:8765

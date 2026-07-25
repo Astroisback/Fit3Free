@@ -627,8 +627,8 @@ public class HrService extends Service {
     private void createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID, "HR Bridge", NotificationManager.IMPORTANCE_DEFAULT);
-            channel.setDescription("Heart Rate Bridge Service");
+                    CHANNEL_ID, "Fit3Free", NotificationManager.IMPORTANCE_DEFAULT);
+            channel.setDescription("Live heart rate from your band");
             channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             channel.setShowBadge(true);
             channel.setSound(null, null);
@@ -653,7 +653,7 @@ public class HrService extends Service {
         PendingIntent stopPi = PendingIntent.getService(this, 1, stop, piFlags);
 
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("HR Bridge")
+                .setContentTitle("Fit3Free")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_menu_compass)
                 .setOngoing(true)
