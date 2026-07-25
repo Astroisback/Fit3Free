@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Landscape always-on display: clock and BPM side by side. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <LinearLayout
+        android:id="@+id/aodRoot"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:clickable="true"
+        android:focusable="true"
+        android:contentDescription="Always-on heart rate display. Tap to exit.">
+
+        <!-- Clock column -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/clockText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--:--"
+                android:textSize="88sp"
+                android:textColor="#8A8A8A"
+                android:letterSpacing="0.02"
+                android:includeFontPadding="false" />
+
+            <TextView
+                android:id="@+id/dateText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="14sp"
+                android:textColor="#4A4A4A"
+                android:layout_marginTop="8dp" />
+
+        </LinearLayout>
+
+        <!-- Hairline divider -->
+        <View
+            android:layout_width="1dp"
+            android:layout_height="140dp"
+            android:background="#1A1A1A"
+            android:layout_marginHorizontal="16dp" />
+
+        <!-- Heart rate column -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <TextView
+                android:id="@+id/aodBpmText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textSize="108sp"
+                android:textStyle="bold"
+                android:textColor="#B03030"
+                android:includeFontPadding="false" />
+
+            <TextView
+                android:id="@+id/aodBpmLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="BPM"
+                android:textSize="13sp"
+                android:letterSpacing="0.3"
+                android:textColor="#4A4A4A"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/aodHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="tap to exit"
+                android:textSize="11sp"
+                android:textColor="#303030"
+                android:layout_marginTop="24dp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</FrameLayout>

@@ -1,0 +1,45 @@
+# Gradle / Android build output
+.gradle/
+build/
+app/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Build artifacts - releases are published via GitHub Releases, not committed
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Signing material - never commit these
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+
+# Secrets
+.env
+.env.*
+!.env.example
+secrets.properties
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Python tooling
+__pycache__/
+*.pyc
+.venv/
+venv/

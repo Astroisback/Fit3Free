@@ -1,0 +1,49 @@
+name: Release APK
+
+# Tag a commit to cut a release:
+#   git tag v1.2 && git push origin v1.2
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.5'
+
+      - name: Build Debug APK
+        run: gradle assembleDebug
+
+      - name: Rename APK with version
+        run: |
+          VERSION="${GITHUB_REF_NAME:-dev}"
+          cp app/build/outputs/apk/debug/app-debug.apk "hr-bridge-${VERSION}.apk"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: hr-bridge-*.apk
+          generate_release_notes: true
+          body: |
+            Debug-signed APK. Sideload it and allow install from unknown sources.
+
+            Both BLE broadcast and WiFi fallback are off by default, so a fresh
+            install only shows heart rate in the notification shade.

@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:gravity="center_horizontal">
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="HR Bridge"
+        android:textSize="28sp"
+        android:textColor="#FF5252"
+        android:textStyle="bold"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="24dp" />
+
+    <!-- BPM Display — tap to open the AMOLED always-on screen -->
+    <TextView
+        android:id="@+id/bpmText"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="--"
+        android:textSize="96sp"
+        android:textColor="#FF5252"
+        android:textStyle="bold"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="?android:attr/selectableItemBackground"
+        android:contentDescription="Current heart rate. Tap to open the always-on display."
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="BPM  ·  tap for always-on display"
+        android:textSize="13sp"
+        android:textColor="#888888"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Status -->
+    <TextView
+        android:id="@+id/statusText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Ready"
+        android:textSize="14sp"
+        android:textColor="#AAAAAA"
+        android:gravity="center"
+        android:layout_marginBottom="32dp" />
+
+    <!-- Device Picker -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Select Device:"
+        android:textSize="14sp"
+        android:textColor="#CCCCCC"
+        android:layout_marginBottom="4dp" />
+
+    <Spinner
+        android:id="@+id/deviceSpinner"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="#1E1E1E"
+        android:popupBackground="#2A2A2A"
+        android:layout_marginBottom="16dp" />
+
+    <!-- PC IP -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="PC Address:"
+        android:textSize="14sp"
+        android:textColor="#CCCCCC"
+        android:layout_marginBottom="4dp" />
+
+    <EditText
+        android:id="@+id/ipEdit"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:inputType="textUri"
+        android:hint="http://192.168.x.x:8765/"
+        android:textColorHint="#555555"
+        android:importantForAutofill="no"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:background="#1E1E1E"
+        android:padding="12dp"
+        android:layout_marginBottom="20dp" />
+
+    <!-- Optional extras. Off = notification-only mode. -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Extras (off = BPM notification only)"
+        android:textSize="14sp"
+        android:textColor="#CCCCCC"
+        android:layout_marginBottom="4dp" />
+
+    <Switch
+        android:id="@+id/bleSwitch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="BLE broadcast (virtual HR monitor)"
+        android:textColor="#EEEEEE"
+        android:textSize="14sp"
+        android:paddingVertical="8dp" />
+
+    <Switch
+        android:id="@+id/wifiSwitch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="WiFi fallback (HTTP POST to PC)"
+        android:textColor="#EEEEEE"
+        android:textSize="14sp"
+        android:paddingVertical="8dp"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/startBtn"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="56dp"
+            android:text="START"
+            android:textSize="18sp"
+            android:backgroundTint="#FF5252"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/stopBtn"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="56dp"
+            android:text="STOP"
+            android:textSize="18sp"
+            android:backgroundTint="#555555"
+            android:enabled="false"
+            android:layout_marginStart="8dp" />
+
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/aodBtn"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:text="ALWAYS-ON DISPLAY"
+        android:textSize="14sp"
+        android:backgroundTint="#1E1E1E"
+        android:textColor="#AAAAAA"
+        android:layout_marginTop="16dp" />
+
+</LinearLayout>
+
+</ScrollView>

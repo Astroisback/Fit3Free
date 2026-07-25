@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#FF5252</item>
+        <item name="colorPrimaryVariant">#D32F2F</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowBackground">#121212</item>
+    </style>
+
+    <!-- True black, chrome-free theme for the always-on display -->
+    <style name="AodTheme" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="android:windowBackground">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentTransitions">false</item>
+    </style>
+</resources>
