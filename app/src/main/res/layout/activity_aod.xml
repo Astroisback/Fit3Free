@@ -35,17 +35,18 @@
             android:textColor="#9A9A9A"
             android:layout_marginTop="6dp" />
 
-        <!-- Battery: level, charge/discharge watts, time remaining -->
+        <!-- Battery: level, charge status, watts, time remaining -->
         <TextView
             android:id="@+id/batteryText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text=""
-            android:textSize="13sp"
-            android:textColor="#8AC08A"
+            android:text="🔋 --%"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#B8B8B8"
             android:gravity="center"
-            android:layout_marginTop="10dp"
-            android:layout_marginBottom="40dp" />
+            android:layout_marginTop="14dp"
+            android:layout_marginBottom="36dp" />
 
         <!-- Heart rate -->
         <TextView

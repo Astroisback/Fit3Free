@@ -47,11 +47,12 @@
                 android:id="@+id/batteryText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="13sp"
-                android:textColor="#8AC08A"
+                android:text="🔋 --%"
+                android:textSize="17sp"
+                android:textStyle="bold"
+                android:textColor="#B8B8B8"
                 android:gravity="center"
-                android:layout_marginTop="10dp" />
+                android:layout_marginTop="12dp" />
 
         </LinearLayout>
 

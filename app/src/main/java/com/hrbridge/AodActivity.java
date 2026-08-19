@@ -8,7 +8,6 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
-import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -40,9 +39,11 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
     private static final long SHIFT_MS = 60_000L;
     private static final int SHIFT_PX = 24;
 
-    /** Re-read battery current every N clock ticks (10s). */
-    private static final int BATTERY_TICKS = 10;
+    /** Re-read battery current every N clock ticks (3s, so watts feel live). */
+    private static final int BATTERY_TICKS = 3;
     private int tickCount = 0;
+
+
 
     /** Ambient light (lux) mapped to window brightness, interpolated in log space. */
     private static final float[] LUX_POINTS = {0f, 3f, 10f, 50f, 200f, 800f, 3000f, 10000f};
@@ -64,8 +65,6 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
 
     private TextView clockText, dateText, bpmText, bpmLabel, hintText, batteryText;
     private View root;
-
-    private BatteryManager batteryManager;
 
     private SensorManager sensorManager;
     private Sensor lightSensor;
@@ -148,7 +147,8 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
         hintText = findViewById(R.id.aodHint);
         batteryText = findViewById(R.id.batteryText);
 
-        batteryManager = (BatteryManager) getSystemService(Context.BATTERY_SERVICE);
+        // Populate before the first frame so the line is never briefly empty.
+        refreshBattery();
 
         // Keep the screen alive and show over the lockscreen.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -210,129 +210,24 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
     }
 
     // =====================================================================
-    //  Battery: level, watts, time remaining
+    //  Battery: level, charge status, watts, time remaining
     // =====================================================================
 
-    /**
-     * Builds the battery line from a sticky ACTION_BATTERY_CHANGED intent.
-     *
-     * Watts are derived from the framework's instantaneous current and voltage
-     * (P = V * I). Current is reported in µA and voltage in mV, and the sign of
-     * the current is vendor-dependent, so magnitude is used and the direction is
-     * taken from the charging status instead.
-     */
+    /** Renders an already-received battery broadcast. */
     private void updateBattery(Intent battery) {
-        if (batteryText == null || battery == null) return;
-
-        int level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-        int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
-        int status = battery.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
-        int voltageMv = battery.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0);
-
-        if (level < 0 || scale <= 0) {
-            batteryText.setText("");
-            return;
-        }
-
-        int pct = Math.round(level * 100f / scale);
-        boolean charging = status == BatteryManager.BATTERY_STATUS_CHARGING
-                || status == BatteryManager.BATTERY_STATUS_FULL;
-        boolean full = status == BatteryManager.BATTERY_STATUS_FULL || pct >= 100;
-
-        StringBuilder sb = new StringBuilder();
-        sb.append(charging ? "⚡ " : "🔋 ").append(pct).append('%');
-
-        double watts = instantaneousWatts(voltageMv);
-        if (watts >= 0.05) {
-            sb.append("  ·  ").append(String.format(Locale.US, "%.1f W", watts));
-        }
-
-        String remaining = timeEstimate(charging, full, pct);
-        if (remaining != null) {
-            sb.append("  ·  ").append(remaining);
-        }
-
-        batteryText.setText(sb.toString());
-        // Green while charging, amber when low, neutral otherwise.
-        batteryText.setTextColor(charging ? 0xFF8AC08A : (pct <= 15 ? 0xFFD98A3A : 0xFF9A9A9A));
+        if (batteryText == null) return;
+        apply(BatteryInfo.from(this, battery));
     }
 
-    /**
-     * Re-reads the sticky battery intent without needing a broadcast. A null
-     * receiver is the documented way to peek at a sticky value; it needs the
-     * export flag on Android 14+ just like a real registration.
-     */
+    /** Re-reads the sticky battery state, e.g. to refresh live wattage. */
     private void refreshBattery() {
-        try {
-            IntentFilter f = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-            Intent sticky = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                    ? registerReceiver(null, f, Context.RECEIVER_EXPORTED)
-                    : registerReceiver(null, f);
-            updateBattery(sticky);
-        } catch (Exception e) {
-            Log.w(TAG, "Battery refresh failed: " + e.getMessage());
-        }
+        if (batteryText == null) return;
+        apply(BatteryInfo.read(this));
     }
 
-    /** P = V * I, from the framework's instantaneous current reading. */
-    private double instantaneousWatts(int voltageMv) {
-        if (batteryManager == null || voltageMv <= 0) return -1;
-        int currentUa = batteryManager.getIntProperty(
-                BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
-        if (currentUa == 0 || currentUa == Integer.MIN_VALUE) return -1;
-
-        double amps = Math.abs(currentUa) / 1_000_000.0;
-        double volts = voltageMv / 1000.0;
-        double w = amps * volts;
-        // Some vendors report current in mA rather than µA; scale back if the
-        // result is physically implausible for a phone.
-        if (w > 250) w /= 1000.0;
-        return w;
-    }
-
-    /**
-     * Time to full while charging, or time to empty while discharging.
-     * Prefers the OS estimate on Android 9+, then falls back to
-     * capacity / current, which is what most devices can actually support.
-     */
-    private String timeEstimate(boolean charging, boolean full, int pct) {
-        if (full) return "full";
-
-        if (charging && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-                && batteryManager != null) {
-            long ms = batteryManager.computeChargeTimeRemaining();
-            if (ms > 0) return formatDuration(ms / 1000L) + " to full";
-        }
-
-        if (batteryManager == null) return null;
-        int currentUa = batteryManager.getIntProperty(
-                BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
-        if (currentUa == 0 || currentUa == Integer.MIN_VALUE) return null;
-
-        double currentMa = Math.abs(currentUa) / 1000.0;
-        if (currentMa < 1) return null;
-
-        // charge_counter is the charge currently in the pack, in µAh.
-        int counterUah = batteryManager.getIntProperty(
-                BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER);
-        if (counterUah <= 0) return null;
-
-        double presentMah = counterUah / 1000.0;
-        double neededMah = charging
-                ? presentMah * (100.0 - pct) / Math.max(1, pct)  // charge still missing
-                : presentMah;                                     // charge left to burn
-
-        double hours = neededMah / currentMa;
-        if (hours <= 0 || hours > 72) return null;
-
-        return formatDuration((long) (hours * 3600)) + (charging ? " to full" : " left");
-    }
-
-    private static String formatDuration(long totalSeconds) {
-        long h = totalSeconds / 3600;
-        long m = (totalSeconds % 3600) / 60;
-        if (h > 0) return m > 0 ? h + "h " + m + "m" : h + "h";
-        return Math.max(1, m) + "m";
+    private void apply(BatteryInfo info) {
+        batteryText.setText(info.text);
+        batteryText.setTextColor(info.color);
     }
 
     // =====================================================================

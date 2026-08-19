@@ -40,6 +40,7 @@ public class MainActivity extends AppCompatActivity {
     private EditText ipEdit;
     private TextView bpmText;
     private TextView statusText;
+    private TextView batteryText;
     private Button startBtn, stopBtn, aodBtn;
     // AppCompat inflates <Switch> as SwitchCompat, so hold the common base type.
     private CompoundButton bleSwitch, wifiSwitch;
@@ -47,6 +48,18 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothAdapter btAdapter;
     private SharedPreferences prefs;
     private final List<BluetoothDevice> deviceList = new ArrayList<>();
+
+    private final android.os.Handler uiHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+
+    /** Battery level changes rarely, but wattage moves constantly. */
+    private final Runnable batteryTick = new Runnable() {
+        @Override
+        public void run() {
+            showBattery();
+            uiHandler.postDelayed(this, 3000L);
+        }
+    };
 
     /* Receives live BPM broadcasts from HrService */
     private final BroadcastReceiver bpmReceiver = new BroadcastReceiver() {
@@ -80,6 +93,7 @@ public class MainActivity extends AppCompatActivity {
         ipEdit = findViewById(R.id.ipEdit);
         bpmText = findViewById(R.id.bpmText);
         statusText = findViewById(R.id.statusText);
+        batteryText = findViewById(R.id.batteryText);
         startBtn = findViewById(R.id.startBtn);
         stopBtn = findViewById(R.id.stopBtn);
         aodBtn = findViewById(R.id.aodBtn);
@@ -157,6 +171,7 @@ public class MainActivity extends AppCompatActivity {
         if (HrService.lastBpm > 0) {
             bpmText.setText(String.valueOf(HrService.lastBpm));
         }
+        uiHandler.post(batteryTick);
         syncButtons();
     }
 
@@ -164,6 +179,15 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         try { unregisterReceiver(bpmReceiver); } catch (Exception ignored) {}
+        uiHandler.removeCallbacks(batteryTick);
+    }
+
+    /** Pulls the current battery state and paints the line. */
+    private void showBattery() {
+        if (batteryText == null) return;
+        BatteryInfo info = BatteryInfo.read(this);
+        batteryText.setText(info.text);
+        batteryText.setTextColor(info.color);
     }
 
     /** Buttons always mirror the real service state, never a guess. */
