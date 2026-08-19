@@ -257,12 +257,21 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
         batteryText.setTextColor(charging ? 0xFF8AC08A : (pct <= 15 ? 0xFFD98A3A : 0xFF9A9A9A));
     }
 
-    /** Re-reads the sticky battery intent without needing a broadcast. */
+    /**
+     * Re-reads the sticky battery intent without needing a broadcast. A null
+     * receiver is the documented way to peek at a sticky value; it needs the
+     * export flag on Android 14+ just like a real registration.
+     */
     private void refreshBattery() {
         try {
-            updateBattery(registerReceiver(null,
-                    new IntentFilter(Intent.ACTION_BATTERY_CHANGED)));
-        } catch (Exception ignored) {}
+            IntentFilter f = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+            Intent sticky = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    ? registerReceiver(null, f, Context.RECEIVER_EXPORTED)
+                    : registerReceiver(null, f);
+            updateBattery(sticky);
+        } catch (Exception e) {
+            Log.w(TAG, "Battery refresh failed: " + e.getMessage());
+        }
     }
 
     /** P = V * I, from the framework's instantaneous current reading. */
@@ -432,7 +441,15 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
             registerReceiver(bpmReceiver, filter);
         }
         // Sticky broadcast: this returns the current battery state right away.
-        registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        // ACTION_BATTERY_CHANGED is a protected system broadcast, so on
+        // Android 14+ it must be registered RECEIVER_EXPORTED. Registering it
+        // without an export flag throws SecurityException and kills the screen.
+        IntentFilter batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(batteryReceiver, batteryFilter, Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(batteryReceiver, batteryFilter);
+        }
 
         applyBrightnessMode();
         updateSensorListener();
