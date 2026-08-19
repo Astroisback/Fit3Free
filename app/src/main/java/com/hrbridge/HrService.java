@@ -186,9 +186,10 @@ public class HrService extends Service {
         startForeground(NOTIF_ID, buildNotification("Connecting..."));
 
         // Optional: act as a virtual HR monitor for other BLE clients.
+        // Advertising is started from onServiceAdded(), never here — see
+        // startGattServer() for why.
         if (bleBroadcast) {
             startGattServer();
-            startAdvertising();
         } else {
             Log.i(TAG, "BLE broadcast disabled by user");
         }
@@ -208,8 +209,7 @@ public class HrService extends Service {
 
         if (ble && !bleBroadcast) {
             bleBroadcast = true;
-            startGattServer();
-            startAdvertising();
+            startGattServer(); // advertising follows in onServiceAdded()
             broadcast("BLE broadcast on");
         } else if (!ble && bleBroadcast) {
             bleBroadcast = false;
@@ -290,12 +290,34 @@ public class HrService extends Service {
         hrService.addCharacteristic(serverHrChar);
         hrService.addCharacteristic(bodySensorLoc);
 
+        // addService() is ASYNCHRONOUS. The service is not present in the GATT
+        // table until onServiceAdded() fires. Advertising 0x180D before then
+        // makes the phone discoverable as a Heart Rate Monitor while the table
+        // is still empty, so a client that connects in that window enumerates
+        // only the two mandatory GAP/GATT services and reports "no HR service".
+        // Advertising is therefore deferred to onServiceAdded().
         gattServer.addService(hrService);
-        Log.i(TAG, "GATT Server started with HR service");
-        broadcast("BLE Server ready");
+        Log.i(TAG, "GATT server open, waiting for onServiceAdded()");
     }
 
     private final BluetoothGattServerCallback serverCallback = new BluetoothGattServerCallback() {
+
+        @Override
+        public void onServiceAdded(int status, BluetoothGattService service) {
+            if (!running || !bleBroadcast) return;
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Log.e(TAG, "addService failed: status=" + status);
+                broadcast("GATT service add failed (" + status + ")");
+                return;
+            }
+            if (!HR_SERVICE_UUID.equals(service.getUuid())) return;
+
+            // Table now really contains 0x180D, so it is safe to advertise it.
+            Log.i(TAG, "HR service added to GATT table");
+            broadcast("BLE Server ready");
+            startAdvertising();
+        }
+
         @Override
         @SuppressWarnings("MissingPermission")
         public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
