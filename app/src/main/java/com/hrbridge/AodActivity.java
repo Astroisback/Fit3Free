@@ -70,7 +70,8 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
     private SensorManager sensorManager;
     private Sensor lightSensor;
     private float smoothedLux = -1f;
-    private float appliedBrightness = Float.NaN;
+    /** Last brightness written to the window. -1 = nothing applied yet. */
+    private float appliedBrightness = -1f;
 
     /**
      * false (default) = leave screen brightness alone, so the AOD matches the
@@ -117,7 +118,11 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
             int bpm = intent.getIntExtra("bpm", 0);
             if (bpm > 0) {
                 bpmText.setText(String.valueOf(bpm));
-      
+            } else if (!HrService.isRunning) {
+                bpmText.setText("--");
+            }
+        }
+    };
 
     /**
      * ACTION_BATTERY_CHANGED is sticky, so registering also gives us the
@@ -128,15 +133,8 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
         public void onReceive(Context context, Intent intent) {
             updateBattery(intent);
         }
-    };      } else if (!HrService.isRunning) {
-                bpmText.setText("--");
-            }
-        }
     };
 
-        batteryText = findViewById(R.id.batteryText);
-
-        batteryManager = (BatteryManager) getSystemService(Context.BATTERY_SERVICE);
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -148,6 +146,9 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
         bpmText = findViewById(R.id.aodBpmText);
         bpmLabel = findViewById(R.id.aodBpmLabel);
         hintText = findViewById(R.id.aodHint);
+        batteryText = findViewById(R.id.batteryText);
+
+        batteryManager = (BatteryManager) getSystemService(Context.BATTERY_SERVICE);
 
         // Keep the screen alive and show over the lockscreen.
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
