@@ -8,6 +8,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -39,26 +40,43 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
     private static final long SHIFT_MS = 60_000L;
     private static final int SHIFT_PX = 24;
 
+    /** Re-read battery current every N clock ticks (10s). */
+    private static final int BATTERY_TICKS = 10;
+    private int tickCount = 0;
+
     /** Ambient light (lux) mapped to window brightness, interpolated in log space. */
     private static final float[] LUX_POINTS = {0f, 3f, 10f, 50f, 200f, 800f, 3000f, 10000f};
     private static final float[] BRIGHTNESS_POINTS = {
-            0.010f, 0.030f, 0.060f, 0.120f, 0.250f, 0.450f, 0.700f, 1.000f};
+            0.060f, 0.120f, 0.220f, 0.400f, 0.600f, 0.800f, 0.920f, 1.000f};
 
     /** Fallback when the device has no light sensor. */
-    private static final float DEFAULT_BRIGHTNESS = 0.02f;
+    private static final float DEFAULT_BRIGHTNESS = 0.35f;
+
+    /** Brightness mode, persisted so the screen opens the way you left it. */
+    private static final String KEY_DIM = "aod_dim_mode";
+    /** Follow whatever the system brightness is (default). */
+    private static final float FOLLOW_SYSTEM = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
 
     /** Smoothing factor for the lux EMA: lower = calmer, less flicker. */
     private static final float LUX_SMOOTHING = 0.12f;
     /** Don't touch the window unless the target moved by at least this much. */
     private static final float BRIGHTNESS_EPSILON = 0.004f;
 
-    private TextView clockText, dateText, bpmText, bpmLabel, hintText;
+    private TextView clockText, dateText, bpmText, bpmLabel, hintText, batteryText;
     private View root;
+
+    private BatteryManager batteryManager;
 
     private SensorManager sensorManager;
     private Sensor lightSensor;
     private float smoothedLux = -1f;
-    private float appliedBrightness = -1f;
+    private float appliedBrightness = Float.NaN;
+
+    /**
+     * false (default) = leave screen brightness alone, so the AOD matches the
+     * rest of the phone. true = auto-dim from the light sensor for night use.
+     */
+    private boolean dimMode = false;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Random random = new Random();
@@ -76,6 +94,9 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
             Date now = new Date();
             clockText.setText(timeFmt.format(now));
             dateText.setText(dateFmt.format(now) + "  ·  " + ampmFmt.format(now));
+            // Current/watts change continuously without firing a broadcast, so
+            // re-read the sticky intent on a slower cadence than the clock.
+            if (++tickCount % BATTERY_TICKS == 0) refreshBattery();
             handler.postDelayed(this, TICK_MS);
         }
     };
@@ -96,12 +117,26 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
             int bpm = intent.getIntExtra("bpm", 0);
             if (bpm > 0) {
                 bpmText.setText(String.valueOf(bpm));
-            } else if (!HrService.isRunning) {
+      
+
+    /**
+     * ACTION_BATTERY_CHANGED is sticky, so registering also gives us the
+     * current state immediately without waiting for a level change.
+     */
+    private final BroadcastReceiver batteryReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            updateBattery(intent);
+        }
+    };      } else if (!HrService.isRunning) {
                 bpmText.setText("--");
             }
         }
     };
 
+        batteryText = findViewById(R.id.batteryText);
+
+        batteryManager = (BatteryManager) getSystemService(Context.BATTERY_SERVICE);
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -129,15 +164,34 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
             lightSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT);
         }
 
-        // Start dim; the first sensor reading corrects it within a frame or two.
-        setBrightness(DEFAULT_BRIGHTNESS);
-        if (lightSensor == null) {
+        // Default is to inherit the system brightness. Previously this screen
+        // always forced its own very low override, which is why the AOD looked
+        // far darker than the rest of the phone and never matched it.
+        dimMode = getSharedPreferences(HrService.PREFS, MODE_PRIVATE)
+                .getBoolean(KEY_DIM, false);
+        applyBrightnessMode();
+
+        if (dimMode && lightSensor == null) {
             Log.i(TAG, "No ambient light sensor, holding fixed brightness");
         }
 
         hideSystemBars();
 
         root.setOnClickListener(v -> finish());
+
+        // Long-press toggles auto-dim, so night use is opt-in rather than forced.
+        root.setOnLongClickListener(v -> {
+            dimMode = !dimMode;
+            getSharedPreferences(HrService.PREFS, MODE_PRIVATE)
+                    .edit().putBoolean(KEY_DIM, dimMode).apply();
+            applyBrightnessMode();
+            updateSensorListener();
+            hintText.setAlpha(1f);
+            hintText.setText(dimMode ? "Auto-dim on" : "Matches system brightness");
+            handler.postDelayed(
+                    () -> hintText.animate().alpha(0f).setDuration(1200).start(), 2000);
+            return true;
+        });
 
         int bpm = HrService.lastBpm;
         bpmText.setText(bpm > 0 ? String.valueOf(bpm) : "--");
@@ -155,11 +209,155 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
     }
 
     // =====================================================================
+    //  Battery: level, watts, time remaining
+    // =====================================================================
+
+    /**
+     * Builds the battery line from a sticky ACTION_BATTERY_CHANGED intent.
+     *
+     * Watts are derived from the framework's instantaneous current and voltage
+     * (P = V * I). Current is reported in µA and voltage in mV, and the sign of
+     * the current is vendor-dependent, so magnitude is used and the direction is
+     * taken from the charging status instead.
+     */
+    private void updateBattery(Intent battery) {
+        if (batteryText == null || battery == null) return;
+
+        int level = battery.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+        int scale = battery.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+        int status = battery.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+        int voltageMv = battery.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0);
+
+        if (level < 0 || scale <= 0) {
+            batteryText.setText("");
+            return;
+        }
+
+        int pct = Math.round(level * 100f / scale);
+        boolean charging = status == BatteryManager.BATTERY_STATUS_CHARGING
+                || status == BatteryManager.BATTERY_STATUS_FULL;
+        boolean full = status == BatteryManager.BATTERY_STATUS_FULL || pct >= 100;
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(charging ? "⚡ " : "🔋 ").append(pct).append('%');
+
+        double watts = instantaneousWatts(voltageMv);
+        if (watts >= 0.05) {
+            sb.append("  ·  ").append(String.format(Locale.US, "%.1f W", watts));
+        }
+
+        String remaining = timeEstimate(charging, full, pct);
+        if (remaining != null) {
+            sb.append("  ·  ").append(remaining);
+        }
+
+        batteryText.setText(sb.toString());
+        // Green while charging, amber when low, neutral otherwise.
+        batteryText.setTextColor(charging ? 0xFF8AC08A : (pct <= 15 ? 0xFFD98A3A : 0xFF9A9A9A));
+    }
+
+    /** Re-reads the sticky battery intent without needing a broadcast. */
+    private void refreshBattery() {
+        try {
+            updateBattery(registerReceiver(null,
+                    new IntentFilter(Intent.ACTION_BATTERY_CHANGED)));
+        } catch (Exception ignored) {}
+    }
+
+    /** P = V * I, from the framework's instantaneous current reading. */
+    private double instantaneousWatts(int voltageMv) {
+        if (batteryManager == null || voltageMv <= 0) return -1;
+        int currentUa = batteryManager.getIntProperty(
+                BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
+        if (currentUa == 0 || currentUa == Integer.MIN_VALUE) return -1;
+
+        double amps = Math.abs(currentUa) / 1_000_000.0;
+        double volts = voltageMv / 1000.0;
+        double w = amps * volts;
+        // Some vendors report current in mA rather than µA; scale back if the
+        // result is physically implausible for a phone.
+        if (w > 250) w /= 1000.0;
+        return w;
+    }
+
+    /**
+     * Time to full while charging, or time to empty while discharging.
+     * Prefers the OS estimate on Android 9+, then falls back to
+     * capacity / current, which is what most devices can actually support.
+     */
+    private String timeEstimate(boolean charging, boolean full, int pct) {
+        if (full) return "full";
+
+        if (charging && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                && batteryManager != null) {
+            long ms = batteryManager.computeChargeTimeRemaining();
+            if (ms > 0) return formatDuration(ms / 1000L) + " to full";
+        }
+
+        if (batteryManager == null) return null;
+        int currentUa = batteryManager.getIntProperty(
+                BatteryManager.BATTERY_PROPERTY_CURRENT_NOW);
+        if (currentUa == 0 || currentUa == Integer.MIN_VALUE) return null;
+
+        double currentMa = Math.abs(currentUa) / 1000.0;
+        if (currentMa < 1) return null;
+
+        // charge_counter is the charge currently in the pack, in µAh.
+        int counterUah = batteryManager.getIntProperty(
+                BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER);
+        if (counterUah <= 0) return null;
+
+        double presentMah = counterUah / 1000.0;
+        double neededMah = charging
+                ? presentMah * (100.0 - pct) / Math.max(1, pct)  // charge still missing
+                : presentMah;                                     // charge left to burn
+
+        double hours = neededMah / currentMa;
+        if (hours <= 0 || hours > 72) return null;
+
+        return formatDuration((long) (hours * 3600)) + (charging ? " to full" : " left");
+    }
+
+    private static String formatDuration(long totalSeconds) {
+        long h = totalSeconds / 3600;
+        long m = (totalSeconds % 3600) / 60;
+        if (h > 0) return m > 0 ? h + "h " + m + "m" : h + "h";
+        return Math.max(1, m) + "m";
+    }
+
+    // =====================================================================
     //  Ambient light -> brightness
     // =====================================================================
 
+    /** Applies the current mode: inherit system brightness, or start dimming. */
+    private void applyBrightnessMode() {
+        if (dimMode) {
+            setBrightness(lightSensor != null && smoothedLux >= 0f
+                    ? luxToBrightness(smoothedLux)
+                    : DEFAULT_BRIGHTNESS);
+        } else {
+            // Hand brightness back to the system and clear the content fade.
+            appliedBrightness = FOLLOW_SYSTEM;
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.screenBrightness = FOLLOW_SYSTEM;
+            getWindow().setAttributes(lp);
+            if (root != null) root.setAlpha(1f);
+        }
+    }
+
+    /** The light sensor is only worth listening to while auto-dim is on. */
+    private void updateSensorListener() {
+        if (sensorManager == null || lightSensor == null) return;
+        if (dimMode) {
+            sensorManager.registerListener(this, lightSensor, SensorManager.SENSOR_DELAY_NORMAL);
+        } else {
+            sensorManager.unregisterListener(this);
+        }
+    }
+
     @Override
     public void onSensorChanged(SensorEvent event) {
+        if (!dimMode) return;
         if (event.sensor.getType() != Sensor.TYPE_LIGHT) return;
 
         float lux = Math.max(0f, event.values[0]);
@@ -195,7 +393,9 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
     }
 
     private void setBrightness(float target) {
-        float b = Math.max(0.005f, Math.min(1f, target));
+        if (!dimMode) return;
+
+        float b = Math.max(0.04f, Math.min(1f, target));
         if (appliedBrightness >= 0f && Math.abs(b - appliedBrightness) < BRIGHTNESS_EPSILON) {
             return;
         }
@@ -205,11 +405,11 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
         lp.screenBrightness = b;
         getWindow().setAttributes(lp);
 
-        // In a dark room the panel can only go so low, so pull the content
-        // alpha down too. That's what actually makes it comfortable at night.
+        // Only fade content in genuine darkness. The old curve faded at every
+        // level, which stacked on top of the dim override and made the text
+        // washed out even in daylight.
         if (root != null) {
-            float alpha = Math.max(0.55f, Math.min(1f, 0.55f + b * 0.9f));
-            root.setAlpha(alpha);
+            root.setAlpha(b < 0.10f ? 0.80f : 1f);
         }
     }
 
@@ -230,9 +430,11 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
         } else {
             registerReceiver(bpmReceiver, filter);
         }
-        if (lightSensor != null) {
-            sensorManager.registerListener(this, lightSensor, SensorManager.SENSOR_DELAY_NORMAL);
-        }
+        // Sticky broadcast: this returns the current battery state right away.
+        registerReceiver(batteryReceiver, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+
+        applyBrightnessMode();
+        updateSensorListener();
         handler.post(tick);
         handler.postDelayed(shift, SHIFT_MS);
         hideSystemBars();
@@ -242,6 +444,7 @@ public class AodActivity extends AppCompatActivity implements SensorEventListene
     protected void onPause() {
         super.onPause();
         try { unregisterReceiver(bpmReceiver); } catch (Exception ignored) {}
+        try { unregisterReceiver(batteryReceiver); } catch (Exception ignored) {}
         if (lightSensor != null) {
             sensorManager.unregisterListener(this);
         }
